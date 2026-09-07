@@ -1,0 +1,7 @@
+{
+  "name": "agent-workflows-mcp",
+  "description": "Agents and DAG workflows as MCP tools: run agent definitions and multi-step workflows from any MCP client, no native subagent support required.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json"
+}

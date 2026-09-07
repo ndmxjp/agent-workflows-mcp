@@ -1,0 +1,22 @@
+{
+  "name": "agent-workflows-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing agent definitions and DAG workflows as plain MCP tools",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "test": "bun test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "prettier": "^3.5.0",
+    "typescript": "^5.9"
+  }
+}

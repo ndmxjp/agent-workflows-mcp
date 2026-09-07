@@ -1,0 +1,33 @@
+{
+  "name": "analyze-and-summarize",
+  "description": "Analyze the repository for a question, in parallel summarize any provided notes, then merge both into one reviewed answer.",
+  "inputs": [
+    { "name": "question", "description": "What to find out about the repository" },
+    { "name": "notes", "description": "Free-form notes to fold into the answer", "required": false }
+  ],
+  "nodes": [
+    {
+      "id": "analyze",
+      "agent": "repo-analyst",
+      "task": "Answer this question about the repository you are in: {{inputs.question}}"
+    },
+    {
+      "id": "digest_notes",
+      "agent": "summarizer",
+      "task": "Summarize these notes in at most five bullet points. If empty, reply 'no notes'.\n\n{{inputs.notes}}"
+    },
+    {
+      "id": "merge",
+      "agent": "summarizer",
+      "task": "Merge the repository analysis and the note digest into one coherent answer to: {{inputs.question}}\n\n## Repository analysis\n{{analyze}}\n\n## Note digest\n{{digest_notes}}",
+      "needs": ["analyze", "digest_notes"]
+    }
+  ],
+  "output": "merge",
+  "review": {
+    "target": "merge",
+    "reviewer": "critic",
+    "trigger": "NEEDS_REVISION",
+    "max_iterations": 2
+  }
+}
