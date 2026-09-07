@@ -1,5 +1,11 @@
 # agent-workflows-mcp
 
+[![CI](https://github.com/ndmxjp/agent-workflows-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ndmxjp/agent-workflows-mcp/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/agent-workflows-mcp)](https://www.npmjs.com/package/agent-workflows-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/agent-workflows-mcp)](https://www.npmjs.com/package/agent-workflows-mcp)
+[![node](https://img.shields.io/node/v/agent-workflows-mcp)](https://www.npmjs.com/package/agent-workflows-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An MCP server that exposes **agents and DAG workflows as plain MCP tools**, so a
 client with no native subagent or workflow feature (or one that deliberately does
 not enable it) can still delegate multi-step work. Agent Plugins 1.0.0
