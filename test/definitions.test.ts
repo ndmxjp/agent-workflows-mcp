@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAgentMarkdown, parseWorkflowJson } from "../src/definitions.ts";
+import { lintShellPattern, parseAgentMarkdown, parseWorkflowJson } from "../src/definitions.ts";
 import { DefinitionError } from "../src/types.ts";
 
 const agentMd = (frontmatter: string, body = "Do the task.") =>
@@ -35,7 +35,7 @@ describe("parseAgentMarkdown", () => {
   test("rejects network clients in allowed_commands when network is false", () => {
     expect(() =>
       parseAgentMarkdown(
-        agentMd('name: x\ndescription: d\nallowed_commands:\n  - "curl .*"'),
+        agentMd('name: x\ndescription: d\nallowed_commands:\n  - "^curl [^;&|<>$`\\\\n]*$"'),
         "a.md",
       ),
     ).toThrow(/network/);
@@ -43,10 +43,46 @@ describe("parseAgentMarkdown", () => {
 
   test("allows network clients when network is true", () => {
     const a = parseAgentMarkdown(
-      agentMd('name: x\ndescription: d\nnetwork: true\nallowed_commands:\n  - "curl .*"'),
+      agentMd(
+        'name: x\ndescription: d\nnetwork: true\nallowed_commands:\n  - "^curl [^;&|<>$`\\\\n]*$"',
+      ),
       "a.md",
     );
-    expect(a.allowedCommands).toEqual(["curl .*"]);
+    expect(a.allowedCommands).toEqual(["^curl [^;&|<>$`\\n]*$"]);
+  });
+
+  test("rejects allowed_commands patterns that permit command chaining", () => {
+    expect(() =>
+      parseAgentMarkdown(
+        agentMd('name: x\ndescription: d\nallowed_commands:\n  - "git status.*"'),
+        "a.md",
+      ),
+    ).toThrow(/unsafe allowed_commands/);
+  });
+});
+
+describe("lintShellPattern", () => {
+  test.each(["git status.*", ".*", "git (log|diff).*", "^git log.*$"])(
+    "rejects %p (wildcard can match shell metacharacters)",
+    (p) => {
+      expect(lintShellPattern(p)).not.toBeNull();
+    },
+  );
+
+  test("rejects unanchored patterns (substring match after a metacharacter)", () => {
+    expect(lintShellPattern("git status[^;&|<>$`\\n]*")).toMatch(/anchor/);
+  });
+
+  test("rejects invalid regexes", () => {
+    expect(lintShellPattern("git (")).toMatch(/invalid regex/);
+  });
+
+  test.each([
+    "^git status[^;&|<>$`\\n]*$",
+    "^git (status|log|diff|show)[^;&|<>$`\\n]*$",
+    "^ls -la$",
+  ])("accepts anchored metacharacter-excluding pattern %p", (p) => {
+    expect(lintShellPattern(p)).toBeNull();
   });
 });
 

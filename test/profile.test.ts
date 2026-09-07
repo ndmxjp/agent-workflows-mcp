@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildProfile, stripAnsi } from "../src/runner/kiro.ts";
+import { buildProfile, resolveTimeoutMs, stripAnsi } from "../src/runner/kiro.ts";
 import type { AgentDefinition } from "../src/types.ts";
 
 const base: AgentDefinition = {
@@ -24,9 +24,10 @@ describe("buildProfile", () => {
   });
 
   test("shell appears only with allowed command patterns, and scoped to them", () => {
-    const p = buildProfile({ ...base, allowedCommands: ["git status.*"] }) as Record<string, any>;
+    const pattern = "^git status[^;&|<>$`\\n]*$";
+    const p = buildProfile({ ...base, allowedCommands: [pattern] }) as Record<string, any>;
     expect(p["tools"]).toContain("shell");
-    expect(p["toolsSettings"]["shell"]).toEqual({ allowedCommands: ["git status.*"] });
+    expect(p["toolsSettings"]["shell"]).toEqual({ allowedCommands: [pattern] });
   });
 
   test("write requires both the definition opt-in AND a caller writeDir", () => {
@@ -42,6 +43,20 @@ describe("buildProfile", () => {
     >;
     expect(both["tools"]).toContain("write");
     expect(both["toolsSettings"]["write"]["allowedPaths"]).toEqual(["/tmp/out/**"]);
+  });
+});
+
+describe("resolveTimeoutMs", () => {
+  test("falls back to the default for unset, garbage, zero, and negative values", () => {
+    const def = resolveTimeoutMs(undefined);
+    expect(def).toBeGreaterThan(0);
+    for (const raw of ["garbage", "", "0", "-5", "NaN", "Infinity"]) {
+      expect(resolveTimeoutMs(raw)).toBe(def);
+    }
+  });
+
+  test("uses a valid positive value", () => {
+    expect(resolveTimeoutMs("120000")).toBe(120000);
   });
 });
 

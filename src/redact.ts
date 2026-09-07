@@ -15,6 +15,12 @@ const PATTERNS: Array<{ kind: string; re: RegExp }> = [
   },
   // Three dot-separated base64url segments, first two starting with eyJ ({"...).
   { kind: "jwt", re: /eyJ[A-Za-z0-9_-]{4,}\.eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}/g },
+  // PEM private-key blocks: child agents can read any file the job user can
+  // (kiro-cli 2.21 ignores read-path scoping), so key material must not pass through.
+  {
+    kind: "private-key",
+    re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----/g,
+  },
 ];
 
 export function redact(text: string): string {

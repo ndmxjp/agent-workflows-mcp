@@ -1,0 +1,21 @@
+{
+  "name": "security-review",
+  "description": "Find high-confidence security vulnerabilities in the given scope, then adversarially verify each finding and drop false positives.",
+  "inputs": [
+    { "name": "scope", "description": "What to review: paths and context about the codebase" }
+  ],
+  "nodes": [
+    {
+      "id": "find",
+      "agent": "security-reviewer",
+      "task": "Security-review the following scope in your working directory.\n\n{{inputs.scope}}"
+    },
+    {
+      "id": "verify",
+      "agent": "finding-verifier",
+      "task": "Verify these security findings against the code in your working directory and produce the final report.\n\n## Reported findings\n{{find}}",
+      "needs": ["find"]
+    }
+  ],
+  "output": "verify"
+}

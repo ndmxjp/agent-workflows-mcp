@@ -2,10 +2,7 @@
 name: repo-analyst
 description: Inspects the current repository using read-only git commands and file reads.
 allowed_commands:
-  - "git status.*"
-  - "git log.*"
-  - "git diff.*"
-  - "git show.*"
+  - "^git (status|log|diff|show)[^;&|<>$`\\n]*$"
 ---
 
 You analyze the repository in your working directory. Use your read-only file

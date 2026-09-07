@@ -8,6 +8,16 @@ import type { AgentDefinition, RunOptions, RunResult } from "../types.ts";
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 /**
+ * AGENT_TIMEOUT_MS from the environment, falling back to the default when unset,
+ * non-numeric, or non-positive. Number("garbage") is NaN, and Node's timers coerce
+ * an invalid delay to ~1ms — which would kill every run instantly.
+ */
+export function resolveTimeoutMs(raw: string | undefined): number {
+  const parsed = Number(raw);
+  return raw !== undefined && Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
+/**
  * Builds the kiro-cli agent profile for a child run. The profile is the security
  * boundary: only the tools the definition earns are listed, allowedTools mirrors
  * tools so a headless run never blocks on a prompt, and includeMcpJson is false
@@ -75,24 +85,46 @@ export async function runKiroAgent(
     `[agent-workflows] spawning kiro-cli agent=${agent.name} env=[${forwarded.join(",")}]`,
   );
 
-  const timeoutMs = opts.timeoutMs ?? Number(process.env["AGENT_TIMEOUT_MS"] ?? DEFAULT_TIMEOUT_MS);
+  const timeoutMs = opts.timeoutMs ?? resolveTimeoutMs(process.env["AGENT_TIMEOUT_MS"]);
   try {
     // node:child_process rather than Bun.spawn so the npm-published bundle runs under node.
+    // "--" ends option parsing: a caller-controlled task starting with "-" must reach
+    // kiro-cli as the prompt, never as a flag.
     const { stdout, stderr, exitCode } = await new Promise<{
       stdout: string;
       stderr: string;
       exitCode: number;
     }>((resolvePromise, rejectPromise) => {
-      const proc = spawn("kiro-cli", ["chat", "--no-interactive", "--agent", profilePath, task], {
-        cwd: opts.cwd ?? process.cwd(),
-        env,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const proc = spawn(
+        "kiro-cli",
+        ["chat", "--no-interactive", "--agent", profilePath, "--", task],
+        {
+          cwd: opts.cwd ?? process.cwd(),
+          env,
+          stdio: ["ignore", "pipe", "pipe"],
+          // Own process group, so the timeout kill reaches grandchildren (shell
+          // commands the agent spawned), not just kiro-cli itself.
+          detached: true,
+        },
+      );
       let out = "";
       let err = "";
       proc.stdout.on("data", (chunk) => (out += chunk));
       proc.stderr.on("data", (chunk) => (err += chunk));
-      const killTimer = setTimeout(() => proc.kill(), timeoutMs);
+      const killGroup = (signal: NodeJS.Signals) => {
+        try {
+          if (proc.pid) process.kill(-proc.pid, signal);
+          else proc.kill(signal);
+        } catch {
+          // The group may already be gone; close will still fire.
+        }
+      };
+      const killTimer = setTimeout(() => {
+        killGroup("SIGTERM");
+        // Escalate in case the child ignores SIGTERM; without this, close never
+        // fires and the tool call hangs past the timeout.
+        setTimeout(() => killGroup("SIGKILL"), 5_000).unref();
+      }, timeoutMs);
       proc.on("error", (e) => {
         clearTimeout(killTimer);
         rejectPromise(e);
