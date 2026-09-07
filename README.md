@@ -176,6 +176,32 @@ bun run format
 
 No build step; TypeScript runs from source under bun.
 
+## Prior art and how this differs
+
+Exposing agents as MCP tools is not a new idea; this server exists for the
+combination the existing projects don't cover:
+
+- **[shinpr/sub-agents-mcp](https://github.com/shinpr/sub-agents-mcp)** — the
+  closest neighbor: markdown-defined sub-agents behind a `run_agent` tool, with
+  many CLI backends (cursor-agent, claude, gemini, codex, …). It has no
+  workflows (single-agent runs only), no kiro-cli backend, and no child
+  sandboxing — children run with whatever the backend CLI allows. Its
+  multi-backend abstraction is a good reference for future runners here.
+- **[lastmile-ai/mcp-agent](https://github.com/lastmile-ai/mcp-agent)** and
+  **[fast-agent](https://fast-agent.ai/agents/workflows)** — Python frameworks
+  where agents and workflows (parallel, evaluator-optimizer, orchestrator) are
+  defined in code and can be served over MCP. Powerful, but code-defined and
+  heavyweight where this server wants declarative data files a CI runner can
+  load at a pinned SHA.
+- **MCP workflow engines** (e.g. the MCP Mediator pattern) — run DAGs of MCP
+  _tool calls_, not agent runs; a different layer.
+
+What this server adds that none of the above combine: declarative definitions
+(markdown agents + JSON DAG workflows) loaded only from the server's own
+directory, a kiro-cli backend for hosts that already carry `KIRO_API_KEY`, and
+a per-run least-privilege child sandbox (generated profile, minimal env, no
+GitHub token, output redaction) as a design requirement rather than an option.
+
 ## Future (not in v1)
 
 - Additional runner backends (Claude Code / claude CLI, direct model APIs).
