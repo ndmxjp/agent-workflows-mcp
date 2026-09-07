@@ -4,14 +4,28 @@
   "description": "MCP server exposing agent definitions and DAG workflows as plain MCP tools",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "agent-workflows-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "agents",
+    "workflows"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "bun run src/server.ts",
+    "build": "bun build src/server.ts --outdir dist --target node",
+    "prepublishOnly": "bun run build && bun test",
     "test": "bun test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "yaml": "^2.9.0",
     "zod": "^4"
   },
   "devDependencies": {

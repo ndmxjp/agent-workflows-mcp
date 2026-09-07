@@ -132,6 +132,27 @@ agree. Cycles, self-loops, unknown agents, and out-of-range `max_iterations`
 
 ## Install
 
+### npm / npx
+
+The package ships a self-contained node bundle (`node >= 18`, no bun required)
+plus the default `agents/` and `workflows/` definitions:
+
+```json
+{
+  "mcpServers": {
+    "agent_workflows": {
+      "command": "npx",
+      "args": ["-y", "agent-workflows-mcp"]
+    }
+  }
+}
+```
+
+To serve your own definitions instead of the bundled ones, point
+`AGENT_WORKFLOWS_DIR` (or `--definitions <dir>`) at a directory containing
+`agents/` and `workflows/`. Note the security caveat: only do this with a
+directory you control, never a checked-out PR.
+
 ### Kiro-action (`mcp_servers` input)
 
 Check out this repository at a pinned SHA in a prior step, then:
@@ -172,9 +193,11 @@ Or as a plain project MCP server in `.mcp.json`:
 bun install
 bun test          # unit + real stdio handshake tests
 bun run format
+bun run build     # bundle dist/server.js (node target) for npm publishing
 ```
 
-No build step; TypeScript runs from source under bun.
+TypeScript runs from source under bun; the build step exists only to produce
+the node-compatible bundle that npm/npx installs (`prepublishOnly` runs it).
 
 ## Prior art and how this differs
 

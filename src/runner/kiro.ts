@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -76,20 +77,31 @@ export async function runKiroAgent(
 
   const timeoutMs = opts.timeoutMs ?? Number(process.env["AGENT_TIMEOUT_MS"] ?? DEFAULT_TIMEOUT_MS);
   try {
-    const proc = Bun.spawn(["kiro-cli", "chat", "--no-interactive", "--agent", profilePath, task], {
-      cwd: opts.cwd ?? process.cwd(),
-      env,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
+    // node:child_process rather than Bun.spawn so the npm-published bundle runs under node.
+    const { stdout, stderr, exitCode } = await new Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    }>((resolvePromise, rejectPromise) => {
+      const proc = spawn("kiro-cli", ["chat", "--no-interactive", "--agent", profilePath, task], {
+        cwd: opts.cwd ?? process.cwd(),
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let out = "";
+      let err = "";
+      proc.stdout.on("data", (chunk) => (out += chunk));
+      proc.stderr.on("data", (chunk) => (err += chunk));
+      const killTimer = setTimeout(() => proc.kill(), timeoutMs);
+      proc.on("error", (e) => {
+        clearTimeout(killTimer);
+        rejectPromise(e);
+      });
+      proc.on("close", (code) => {
+        clearTimeout(killTimer);
+        resolvePromise({ stdout: out, stderr: err, exitCode: code ?? 1 });
+      });
     });
-    const killTimer = setTimeout(() => proc.kill(), timeoutMs);
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-    clearTimeout(killTimer);
     // kiro-cli --no-interactive prefixes the reply with "> "; strip it.
     const output = stripAnsi(stdout).trim().replace(/^>\s?/, "");
     if (exitCode !== 0) {

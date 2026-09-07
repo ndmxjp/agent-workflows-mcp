@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import {
   DefinitionError,
@@ -75,7 +76,7 @@ export function parseAgentMarkdown(text: string, sourceName: string): AgentDefin
   }
   let raw: unknown;
   try {
-    raw = Bun.YAML.parse(match[1]!);
+    raw = parseYaml(match[1]!);
   } catch (e) {
     throw new DefinitionError(`${sourceName}: invalid YAML frontmatter: ${(e as Error).message}`);
   }
