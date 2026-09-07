@@ -1,6 +1,6 @@
 {
   "name": "agent-workflows-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server exposing agent definitions and DAG workflows as plain MCP tools",
   "license": "MIT",
   "type": "module",
@@ -9,8 +9,7 @@
   },
   "files": [
     "dist",
-    "agents",
-    "workflows"
+    "definitions"
   ],
   "engines": {
     "node": ">=18"

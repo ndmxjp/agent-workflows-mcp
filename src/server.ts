@@ -10,9 +10,11 @@ import { redact } from "./redact.ts";
 import { getRunner } from "./runner/index.ts";
 
 /**
- * Definitions are loaded from the server's own directory (or an explicit
- * --definitions / AGENT_WORKFLOWS_DIR override) — never from the caller's cwd,
- * which may be an attacker-controlled checkout.
+ * Definitions are loaded from the server's own definitions/ directory (or an
+ * explicit --definitions / AGENT_WORKFLOWS_DIR override) — never from the caller's
+ * cwd, which may be an attacker-controlled checkout. They live under definitions/
+ * rather than a top-level agents/ so that plugin-aware clients (Claude Code scans
+ * agents/ for its own native subagents) do not load them as unsandboxed agents.
  */
 function definitionsDir(): string {
   const argIdx = process.argv.indexOf("--definitions");
@@ -21,7 +23,7 @@ function definitionsDir(): string {
   }
   const fromEnv = process.env["AGENT_WORKFLOWS_DIR"];
   if (fromEnv) return resolve(fromEnv);
-  return join(dirname(fileURLToPath(import.meta.url)), "..");
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "definitions");
 }
 
 function textResult(payload: unknown, isError = false) {
@@ -34,7 +36,7 @@ function errorResult(message: string) {
 }
 
 function main(defs: Definitions): void {
-  const server = new McpServer({ name: "agent_workflows", version: "0.1.0" });
+  const server = new McpServer({ name: "agent_workflows", version: "0.2.0" });
 
   server.registerTool(
     "list_agents",

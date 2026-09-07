@@ -1,0 +1,14 @@
+{
+  "name": "agent-workflows-mcp",
+  "owner": {
+    "name": "ndmxjp"
+  },
+  "plugins": [
+    {
+      "name": "agent-workflows-mcp",
+      "source": "./",
+      "description": "Agents and DAG workflows as MCP tools for Claude Code, Kiro, and any Agent Plugins 1.0.0 client."
+    }
+  ],
+  "description": "Agents and DAG workflows as MCP tools (agent-workflows-mcp)."
+}

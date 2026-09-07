@@ -14,8 +14,8 @@ so shipping them as MCP tools is the client-portable route: the same repository
 works from [Kiro-action](https://github.com/ndmxjp/Kiro-action), Claude Code,
 Kiro, or any other MCP client.
 
-Definitions live in this repository (`agents/*.md`, `workflows/*.json`); the
-server reads them from its **own** directory — never from the caller's working
+Definitions live in this repository (`definitions/agents/*.md`,
+`definitions/workflows/*.json`); the server reads them from its **own** directory — never from the caller's working
 directory, which may be an untrusted checkout. Every tool returns text. The
 server never posts to GitHub and needs no GitHub token; the calling agent owns
 its own reporting channel.
@@ -100,7 +100,7 @@ exactly why this server rebuilds those guarantees for its children.
 
 ## Definition formats
 
-Agent (`agents/<name>.md`):
+Agent (`definitions/agents/<name>.md`):
 
 ```markdown
 ---
@@ -116,7 +116,7 @@ model: null # optional model override
 System prompt for the agent goes here.
 ```
 
-Workflow (`workflows/<name>.json`):
+Workflow (`definitions/workflows/<name>.json`):
 
 ```json
 {
@@ -153,7 +153,7 @@ agree. Cycles, self-loops, unknown agents, and out-of-range `max_iterations`
 ### npm / npx
 
 The package ships a self-contained node bundle (`node >= 18`, no bun required)
-plus the default `agents/` and `workflows/` definitions:
+plus the default `definitions/` (agents and workflows):
 
 ```json
 {
@@ -168,7 +168,7 @@ plus the default `agents/` and `workflows/` definitions:
 
 To serve your own definitions instead of the bundled ones, point
 `AGENT_WORKFLOWS_DIR` (or `--definitions <dir>`) at a directory containing
-`agents/` and `workflows/`. Note the security caveat: only do this with a
+`agents/` and `workflows/` subdirectories. Note the security caveat: only do this with a
 directory you control, never a checked-out PR.
 
 ### Kiro-action (`mcp_servers` input)
@@ -189,8 +189,22 @@ mcp_servers: |
 
 ```
 /plugin marketplace add ndmxjp/agent-workflows-mcp
-/plugin install agent-workflows-mcp
+/plugin install agent-workflows-mcp@agent-workflows-mcp
 ```
+
+The plugin's MCP server is declared once in the root `mcp.json` (Agent Plugins
+1.0.0 format, `npx -y agent-workflows-mcp`); `.claude-plugin/plugin.json`
+points at that same file, so Claude Code and any Agent Plugins client share one
+server definition. Agent and workflow definitions live under `definitions/`
+deliberately: a top-level `agents/` would be picked up by Claude Code as native
+subagents with inherited tools, bypassing this server's sandbox.
+
+### Kiro (Power)
+
+Kiro Powers accept Agent Plugins 1.0.0 packages: Powers panel → Add Custom Power
+→ Import power from GitHub → `https://github.com/ndmxjp/agent-workflows-mcp`.
+The root `plugin.json` + `mcp.json` are what Kiro reads; the MCP server is
+managed inside the Power.
 
 Or as a plain project MCP server in `.mcp.json`:
 

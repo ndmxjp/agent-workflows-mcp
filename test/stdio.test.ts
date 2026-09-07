@@ -59,7 +59,7 @@ describe("stdio handshake", () => {
         JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
         rpc(2, "tools/list"),
       ],
-      {}, // default definitions dir = repo root (agents/ + workflows/ ship with the repo)
+      {}, // default definitions dir = <repo>/definitions (ships with the repo)
     );
     expect(lines.length).toBe(2);
     const init = JSON.parse(lines[0]!);
