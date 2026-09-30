@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildChildEnv } from "../env.ts";
 import type { AgentDefinition, RunOptions, RunResult } from "../types.ts";
@@ -60,6 +61,16 @@ export function buildProfile(
   };
 }
 
+/**
+ * kiro-cli reports a profile it could not load only as a stderr warning and then
+ * RUNS ANYWAY with the default agent — i.e. without this server's sandbox. That
+ * must be a hard failure, never a silent downgrade (seen on kiro-cli 2.26, where
+ * `--agent <file path>` fails with "Internal error" and only name lookup works).
+ */
+export function profileLoadFailed(stderr: string): boolean {
+  return /failed to set agent/i.test(stderr);
+}
+
 /** Strips ANSI escape sequences from CLI output. */
 export function stripAnsi(text: string): string {
   // eslint-disable-next-line no-control-regex
@@ -68,17 +79,28 @@ export function stripAnsi(text: string): string {
 
 /**
  * Runs one agent task through `kiro-cli chat --no-interactive` with a generated
- * profile written to a private temp dir and a minimal environment (see env.ts).
- * Never passes --trust-all-tools; trust comes from the profile's allowedTools.
+ * profile and a minimal environment (see env.ts). Never passes --trust-all-tools;
+ * trust comes from the profile's allowedTools.
+ *
+ * The profile is installed under ~/.kiro/agents/ with a unique per-run name and
+ * passed to --agent BY NAME, then removed: kiro-cli 2.26 no longer accepts a file
+ * path there (it warns and falls back to the default agent), while name lookup
+ * works on every engine. The unique name also prevents a hostile checkout's local
+ * .kiro/agents/ from shadowing it.
  */
 export async function runKiroAgent(
   agent: AgentDefinition,
   task: string,
   opts: RunOptions = {},
 ): Promise<RunResult> {
-  const profileDir = mkdtempSync(join(tmpdir(), "agent-workflows-"));
-  const profilePath = join(profileDir, `${agent.name}.json`);
-  writeFileSync(profilePath, JSON.stringify(buildProfile(agent, opts), null, 2));
+  const agentsDir = join(homedir(), ".kiro", "agents");
+  mkdirSync(agentsDir, { recursive: true });
+  const runName = `awm-${randomUUID()}`;
+  const profilePath = join(agentsDir, `${runName}.json`);
+  writeFileSync(
+    profilePath,
+    JSON.stringify({ ...buildProfile(agent, opts), name: runName }, null, 2),
+  );
 
   const { env, forwarded } = buildChildEnv();
   console.error(
@@ -95,18 +117,14 @@ export async function runKiroAgent(
       stderr: string;
       exitCode: number;
     }>((resolvePromise, rejectPromise) => {
-      const proc = spawn(
-        "kiro-cli",
-        ["chat", "--no-interactive", "--agent", profilePath, "--", task],
-        {
-          cwd: opts.cwd ?? process.cwd(),
-          env,
-          stdio: ["ignore", "pipe", "pipe"],
-          // Own process group, so the timeout kill reaches grandchildren (shell
-          // commands the agent spawned), not just kiro-cli itself.
-          detached: true,
-        },
-      );
+      const proc = spawn("kiro-cli", ["chat", "--no-interactive", "--agent", runName, "--", task], {
+        cwd: opts.cwd ?? process.cwd(),
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        // Own process group, so the timeout kill reaches grandchildren (shell
+        // commands the agent spawned), not just kiro-cli itself.
+        detached: true,
+      });
       let out = "";
       let err = "";
       proc.stdout.on("data", (chunk) => (out += chunk));
@@ -134,6 +152,15 @@ export async function runKiroAgent(
         resolvePromise({ stdout: out, stderr: err, exitCode: code ?? 1 });
       });
     });
+    if (profileLoadFailed(stderr)) {
+      return {
+        ok: false,
+        output: "",
+        error:
+          `kiro-cli failed to load the generated agent profile "${runName}" and would have ` +
+          `run WITHOUT the sandbox; aborting. stderr: ${stripAnsi(stderr).trim().slice(0, 500)}`,
+      };
+    }
     // kiro-cli --no-interactive prefixes the reply with "> "; strip it.
     const output = stripAnsi(stdout).trim().replace(/^>\s?/, "");
     if (exitCode !== 0) {
@@ -148,6 +175,6 @@ export async function runKiroAgent(
   } catch (e) {
     return { ok: false, output: "", error: `failed to start kiro-cli: ${(e as Error).message}` };
   } finally {
-    rmSync(profileDir, { recursive: true, force: true });
+    rmSync(profilePath, { force: true });
   }
 }

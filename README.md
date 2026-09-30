@@ -52,6 +52,14 @@ Constraints of the kiro-cli backend:
 
 - `kiro-cli` must be on `PATH` and authenticated (env `KIRO_API_KEY` or an
   existing login under `HOME`).
+- The generated profile is installed under `~/.kiro/agents/` with a unique
+  per-run name and removed after the run: kiro-cli 2.26 no longer loads
+  `--agent <file path>` (it warns and silently falls back to the default,
+  unsandboxed agent), while name lookup works on every engine. The runner
+  treats that warning as a hard failure rather than running unsandboxed.
+- Child model selection follows the user's global `chat.defaultModel` when a
+  definition sets `model: null`; a broken global default fails every run
+  (`--model` is ignored in non-interactive mode on 2.26).
 - One child process per agent run; per-run timeout via `AGENT_TIMEOUT_MS`
   (default 300000).
 
@@ -69,8 +77,8 @@ less restricted than their definition earns:
   `(a|b)` groups, and `[^…]` classes excluding `` ;&|<>$` `` and newline, e.g.
   ``^git (status|log)[^;&|<>$`\n]*$``. A definition with an unsafe pattern
   fails the server at startup.
-- **Read access is NOT path-scoped (known limitation).** kiro-cli 2.21 ignores
-  read-path restrictions in `toolsSettings` (verified empirically), so a child
+- **Read access is NOT path-scoped (known limitation).** kiro-cli (verified on
+  2.21 and 2.26) ignores read-path restrictions in `toolsSettings`, so a child
   can read any file the job's user can — including credentials — and return
   them in its output. Redaction (below) catches common token shapes and PEM
   private-key blocks, but treat child output as able to contain anything the

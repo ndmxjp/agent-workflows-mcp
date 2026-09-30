@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildProfile, resolveTimeoutMs, stripAnsi } from "../src/runner/kiro.ts";
+import {
+  buildProfile,
+  profileLoadFailed,
+  resolveTimeoutMs,
+  stripAnsi,
+} from "../src/runner/kiro.ts";
 import type { AgentDefinition } from "../src/types.ts";
 
 const base: AgentDefinition = {
@@ -43,6 +48,19 @@ describe("buildProfile", () => {
     >;
     expect(both["tools"]).toContain("write");
     expect(both["toolsSettings"]["write"]["allowedPaths"]).toEqual(["/tmp/out/**"]);
+  });
+});
+
+describe("profileLoadFailed", () => {
+  test("detects kiro-cli's profile-load warning (would run unsandboxed)", () => {
+    expect(profileLoadFailed("[warn] failed to set agent '/tmp/x.json': Internal error\n")).toBe(
+      true,
+    );
+  });
+
+  test("passes clean stderr", () => {
+    expect(profileLoadFailed("")).toBe(false);
+    expect(profileLoadFailed("some unrelated warning")).toBe(false);
   });
 });
 
